@@ -29,7 +29,6 @@ This project is a **Personalized Course Recommendation System** designed to sugg
 
 ## Features
 - **Personalized course recommendations** based on the user’s profile.
-- **Prediction of course completion** probability to help users choose courses they are most likely to finish.
 - **Tailored learning paths** to guide users through an optimal sequence of courses.
 
 ## Technologies Used
