@@ -68,7 +68,7 @@ Once the application is running, users can enter their learning goals, skill lev
 ---
 
 ## **Future Work**
-- **Expand Course Database**: Integrate more courses from other platforms such as Coursera or Udemy.
+- **Expand Course Database**: Integrate more courses from other platforms such as Udemy or Masterclass.
 - **Advanced AI Techniques**: Explore deep learning models for better predictions.
 - **Improved UI/UX**: Enhance the interface for a more interactive user experience.
 
