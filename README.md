@@ -27,6 +27,9 @@
 
 This project is a **Personalized Course Recommendation System** designed to suggest optimal learning paths for online learners based on their profiles, goals, and study history.
 
+## Dataset
+- *Update ...*
+
 ## Features
 - **Personalized course recommendations** based on the user’s profile.
 - **Tailored learning paths** to guide users through an optimal sequence of courses.
