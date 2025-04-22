@@ -1,154 +1,194 @@
-import json, re, time, csv, math, itertools, pathlib, logging, sys
-from typing import Dict, List
-import requests, pandas as pd
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
+# from bs4 import BeautifulSoup
+# import requests
+# import json, re, time, csv, math, itertools, pathlib, logging, sys
+
+# BASE          = "https://api.coursera.org/api/"
+# FIELDS_COURSE  = "name,slug,workload,duration,primaryLanguages,partnerIds,instructorIds"
+# BATCH          = 500                 
+# CHECKPOINT_EVERY = 5_0          
+# OUT_DIR        = pathlib.Path("data").resolve()
+# OUT_DIR.mkdir(exist_ok=True)
+# logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+# s      = requests.Session()
+
+# edge_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"
+# s.headers.update({
+#     "Accept": "application/json, text/plain, */*",
+#     "User-Agent": edge_user_agent
+# })
+
+# SKILL_RE   = re.compile(r'("skills"\s*:\s*\[(.*?)\])|("What you\'ll learn"\s*:\s*\[(.*?)\])', re.S)
+
+# url = "https://www.coursera.org/learn/3d-modeling-rhinoscript"  # hoặc trang bạn đang test
+# html = s.get(url, timeout=20).text
+
+# skills_blk  = SKILL_RE.search(html)
+
+# skills = {"skills"    : ", ".join(json.loads("["+skills_blk.group(2)+"]")) if skills_blk else ""}
+
+# print("🎯 Toàn bộ kỹ năng tìm thấy:")
+# print(skills)
+
+import numpy as np
+import requests
+import re
+import time
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
-from tenacity import retry, stop_after_attempt, wait_exponential
-from tqdm import tqdm
+import json
 
-BASE          = "https://api.coursera.org/api/"
-FIELDS_COURSE  = "name,slug,workload,duration,primaryLanguages,partnerIds,instructorIds"
-BATCH          = 500                 
-CHECKPOINT_EVERY = 5_0          
-OUT_DIR        = pathlib.Path("data").resolve()
-OUT_DIR.mkdir(exist_ok=True)
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-s      = requests.Session()
-
+# Khởi tạo requests session và headers
+session = requests.Session()
 edge_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"
-s.headers.update({
-    "Accept": "application/json, text/plain, */*",
+session.headers.update({
     "User-Agent": edge_user_agent
 })
 
-def chunks(lst, n):
-    it = iter(lst)
-    while True:
-        batch = list(itertools.islice(it, n))
-        if not batch: break
-        yield batch
+# Cấu hình Selenium
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+driver = webdriver.Chrome(options=chrome_options)
 
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=30))
-def get_json(url:str, params:Dict=None, method:str="GET") -> Dict:
-    """Request wrapper with retries & 4xx handling"""
-    r = s.get(url, params=params, timeout=30) if method=="GET" else s.post(url, json=params, timeout=30)
-    if r.status_code==414:                     
-        logging.warning("414 at %s – replace with POST", url.split("?")[0])
-        r = s.post(url.split("?")[0], json=params, timeout=30)
-    r.raise_for_status()
-    return r.json()
+# Regex
+SKILL_RE = re.compile(r'("skills"\s*:\s*\[(.*?)\])|("What you\'ll learn"\s*:\s*\[(.*?)\])', re.S)
 
-def save_checkpoint_json(df: pd.DataFrame, idx: int):
-    f = OUT_DIR / f"coursera_courses_ckpt_{idx}.json"
-    df.to_json(f, orient="records", lines=True, force_ascii=False)
-    logging.info("Finished %s (%d rows)", f.name, len(df))
+# Đọc link
+file_path = "coursera_course_urls.txt"
+with open(file_path, "r", encoding="utf-8") as f:
+    course_links = [line.strip() for line in f if line.strip()]
 
-def crawl_course_headers() -> List[Dict]:
-    start, got, headers = 0, 1, []
-    pbar = tqdm(desc="Fetching headers", unit="course")
-    while got:
-        url = f"{BASE}courses.v1"
-        params = {"start":start, "limit":BATCH, "fields":FIELDS_COURSE}
-        data = get_json(url, params)
-        got  = len(data.get("elements",[]))
-        headers.extend(data["elements"])
-        pbar.update(got)
-        start += got
-    pbar.close()
-    logging.info("Total number of courses: %d", len(headers))
-    return headers
-
-def enrich_partners(df:pd.DataFrame):
-    partner_map = {}
-    all_ids = sorted({pid for ids in df.partnerIds for pid in ids})
-    for chunk_ids in chunks(all_ids, 50):          
-        ids_str = ",".join(map(str, chunk_ids))
-        url = f"{BASE}partners.v1"
-        partners = get_json(url, params={"ids":ids_str})["elements"]
-        partner_map.update({p["id"]:p["name"] for p in partners})
-    df["organization"] = df.partnerIds.apply(lambda x:", ".join(partner_map.get(pid,"") for pid in x))
-    return df.drop(columns=["partnerIds"])
-
-def enrich_instructors(df:pd.DataFrame):
-    inst_map={}
-    all_ids = sorted({iid for ids in df.instructorIds for iid in ids})
-    for chunk_ids in chunks(all_ids, 50):
-        url = f"{BASE}instructors.v1"
-        insts = get_json(url, params={"ids":",".join(map(str, chunk_ids))})["elements"]
-        inst_map.update({i["id"]:i.get("fullName") or i.get("name","") for i in insts})
-    df["instructors"] = df.instructorIds.apply(lambda x:", ".join(inst_map.get(iid,"") for iid in x))
-    return df.drop(columns=["instructorIds"])
-
-LEVEL_RE   = re.compile(r"(Beginner|Intermediate|Advanced) level", re.I)
-HOUR_RE    = re.compile(r"Approx\.\s+([\d\.]+\s+\w+)", re.I)
-SKILL_RE   = re.compile(r'("skills"\s*:\s*\[(.*?)\])|("What you\'ll learn"\s*:\s*\[(.*?)\])', re.S)
-ENROLL_RE  = re.compile(r'([\d,]+)\s+already enrolled', re.I)
-PRICE_RE   = re.compile(r'\$[\d\.]+|Enroll for Free')
-PHOTO_RE   = re.compile(r'"imageUrl"\s*:\s*"([^"]+)"')  
-RATING_RE  = re.compile(r'aria-label="([\d\.]+)\s+stars"')  
-REVIEWS_RE = re.compile(r'\(([\d,]+)\s+reviews\)')  
-ENROLLED_RE = re.compile(r'([\d,]+)\s+learners') 
-
-@retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=1, min=1, max=20))
-def parse_course_page(slug:str)->Dict:
-    url = f"https://www.coursera.org/learn/{slug}?__amp=1"  
-    html = s.get(url, timeout=20).text
-    level       = LEVEL_RE.search(html)
-    duration    = HOUR_RE.search(html)
-    skills_blk  = SKILL_RE.search(html)
-    enroll      = ENROLL_RE.search(html)
-    price       = PRICE_RE.search(html)
-    photo_url   = PHOTO_RE.search(html)
-    rating      = RATING_RE.search(html)
-    reviews     = REVIEWS_RE.search(html)
-    enrolled    = ENROLLED_RE.search(html)
-    
-    return {
-        "level"     : level.group(1).lower() if level else "",
-        "est_hours" : duration.group(1) if duration else "",
-        "skills"    : ", ".join(json.loads("["+skills_blk.group(2)+"]")) if skills_blk else "",
-        "enrolled"  : int(enroll.group(1).replace(",","")) if enroll else None,
-        "price"     : ("free" if price and "free" in price.group(0).lower() else price.group(0) if price else ""),
-        "photo_url" : photo_url.group(1) if photo_url else "",
-        "rating"    : float(rating.group(1)) if rating else None,
-        "reviews"   : int(reviews.group(1).replace(",", "")) if reviews else None,
-        "total_enrolled" : int(enrolled.group(1).replace(",", "")) if enrolled else None
-    }
-
-
-def main():
-    headers = crawl_course_headers()
-    df = pd.DataFrame(headers)
-    df = enrich_partners(df)
-    df = enrich_instructors(df)
-
-    extra_cols = {k: [] for k in ["level", "est_hours", "skills", "enrolled", "price", "photo_url", "rating", "reviews", "total_enrolled"]}
-
-    for i, row in tqdm(df.iterrows(), total=len(df), desc="Parsing pages"):
-        try:
-            info = parse_course_page(row.slug)
-        except Exception as e:
-            logging.warning("❗ %s (%s)", e, row.slug)
-            info = {k: "" for k in extra_cols}
-
-        for k, v in info.items():
-            extra_cols[k].append(v)
-
-        if (i + 1) % CHECKPOINT_EVERY == 0:
-            tmp = pd.concat(
-                [
-                    df.iloc[: i + 1].reset_index(drop=True),
-                    pd.DataFrame({k: extra_cols[k][: i + 1] for k in extra_cols}),
-                ],
-                axis=1,
-            )
-            save_checkpoint_json(tmp, i + 1)
-
-    df_final = pd.concat([df, pd.DataFrame(extra_cols)], axis=1).fillna("")
-    df_final.to_csv("coursera_courses_full.csv", index=False)
-    logging.info("Finish: coursera_courses_full.csv (%d rows)", len(df_final))
-
-if __name__ == "__main__":
+data = []
+for idx, link in enumerate(course_links):
     try:
-        main()
-    except KeyboardInterrupt:
-        logging.warning("Pausing…")
+        driver.get(link)
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "h1"))
+        )
+        html = driver.page_source
+    except:
+        print(f"⚠️ Không load được trang: {link}")
+        continue
+
+    time.sleep(1)
+
+    def safe_find_all(div_list, index, class_name):
+        try:
+            return div_list[index].find("div", class_=class_name)
+        except:
+            return None
+
+    def get_text_by_xpath(xpath):
+        try:
+            text = driver.find_element(By.XPATH, xpath).text
+            return text if text.strip() else np.nan
+        except:
+            return np.nan
+
+    def get_content_from_meta(xpath):
+        try:
+            content = driver.find_element(By.XPATH, xpath).get_attribute("content")
+            return content if content.strip() else np.nan
+        except:
+            return np.nan
+
+    # Lấy HTML bằng requests để tìm skills
+    try:
+        driver.get(link)
+        html = driver.page_source
+        skills_blk = SKILL_RE.search(html)
+        if skills_blk:
+            skills = ", ".join(json.loads("[" + skills_blk.group(2) + "]")) if skills_blk.group(2) else \
+                     ", ".join(json.loads("[" + skills_blk.group(4) + "]")) if skills_blk.group(4) else np.nan
+        else:
+            skills = np.nan
+    except Exception as e:
+        print(f"⚠️ Lỗi khi lấy skills cho {link}: {e}")
+        skills = np.nan
+
+    # Nếu không lấy được skills bằng requests, thử lại bằng BeautifulSoup
+    if skills is np.nan:
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        spans = soup.select("ul.css-yk0mzy span.css-o5tswl")
+        if spans:
+            skills = [s.get_text(strip=True) for s in spans if s.get_text(strip=True)]
+        else:
+            divs = soup.find_all("div", attrs={"data-testid": "visually-hidden"})
+            for div in divs:
+                if "Category:" in div.text:
+                    skill = div.text.split("Category:")[-1].strip()
+                    if skill:
+                        skills.append(skill)
+        skills = skills if skills else np.nan
+
+    # === Thu thập các thông tin khác ===
+    try:
+        title = driver.find_element(By.TAG_NAME, "h1").text.strip()
+        title = title if title else np.nan
+    except:
+        title = np.nan
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    provider_div = soup.find("div", class_="css-15g7tpu")
+    organization = np.nan
+    if provider_div:
+        span = provider_div.find("span", class_="css-6ecy9b")
+        if span:
+            organization = span.text.strip() if span.text.strip() else np.nan
+
+    instructor = get_text_by_xpath('/html/body/div[2]/div/main/section[2]/div/div/div[1]/div[1]/div/div/div[2]/div[2]/div/div[2]/div[1]/p/span/a/span')
+    description = get_content_from_meta('/html/head/meta[22]')
+    learners = get_text_by_xpath('/html/body/div[2]/div/main/section[2]/div/div/div[1]/div[1]/div/div/div[2]/div[4]/p/span/strong/span')
+
+    inner_blocks = soup.find_all("div", class_="css-dwgey1")
+    level = np.nan
+    for i, block in enumerate(inner_blocks):
+        level_div = safe_find_all(inner_blocks, i, "css-fk6qfz")
+        text = level_div.text.strip().lower() if level_div else ""
+        if "level" in text:
+            level = level_div.text.strip() if level_div else np.nan
+            break
+
+    duration_div = safe_find_all(inner_blocks, 3, "css-fk6qfz")
+    duration_info = duration_div.text.strip() if duration_div and duration_div.text.strip() else np.nan
+
+    rating_div = soup.find("div", attrs={"aria-label": lambda v: v and "stars" in v})
+    rating = rating_div.text.strip() if rating_div and rating_div.text.strip() else np.nan
+
+    try:
+        elements = driver.find_elements(By.CSS_SELECTOR, '[data-testid="cml-viewer"]')
+        lessons = [el.text.strip() for el in elements if el.text.strip()]
+        lessons = lessons if lessons else np.nan
+    except:
+        lessons = np.nan
+
+    # Ghi vào dataset
+    data.append({
+        'title': title,
+        'organization': organization,
+        'instructor': instructor,
+        'duration_info': duration_info,
+        'level': level,
+        'description': description,
+        'lessons': lessons,
+        'skills': skills,
+        'rating': rating,
+        'learners': learners,
+        'link': link
+    })
+
+    print(f"✅ Done {idx+1}/{len(course_links)}: {title}")
+
+# Đóng driver sau khi hoàn thành
+driver.quit()
+
+df = pd.DataFrame(data)
+df.to_csv("coursera_course_data.csv", index=False, encoding="utf-8-sig")
