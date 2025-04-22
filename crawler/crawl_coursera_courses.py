@@ -1,36 +1,3 @@
-# from selenium import webdriver
-# from selenium.webdriver.chrome.options import Options
-# from bs4 import BeautifulSoup
-# import requests
-# import json, re, time, csv, math, itertools, pathlib, logging, sys
-
-# BASE          = "https://api.coursera.org/api/"
-# FIELDS_COURSE  = "name,slug,workload,duration,primaryLanguages,partnerIds,instructorIds"
-# BATCH          = 500                 
-# CHECKPOINT_EVERY = 5_0          
-# OUT_DIR        = pathlib.Path("data").resolve()
-# OUT_DIR.mkdir(exist_ok=True)
-# logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-# s      = requests.Session()
-
-# edge_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"
-# s.headers.update({
-#     "Accept": "application/json, text/plain, */*",
-#     "User-Agent": edge_user_agent
-# })
-
-# SKILL_RE   = re.compile(r'("skills"\s*:\s*\[(.*?)\])|("What you\'ll learn"\s*:\s*\[(.*?)\])', re.S)
-
-# url = "https://www.coursera.org/learn/3d-modeling-rhinoscript"  # hoặc trang bạn đang test
-# html = s.get(url, timeout=20).text
-
-# skills_blk  = SKILL_RE.search(html)
-
-# skills = {"skills"    : ", ".join(json.loads("["+skills_blk.group(2)+"]")) if skills_blk else ""}
-
-# print("🎯 Toàn bộ kỹ năng tìm thấy:")
-# print(skills)
-
 import numpy as np
 import requests
 import re
