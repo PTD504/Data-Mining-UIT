@@ -19,60 +19,64 @@
 | Nguyễn Hữu Đức        | [22520270@gm.uit.edu.vn](mailto:22520270@gm.uit.edu.vn) |
 
 ## Supervisors  
-- **TS. Võ Nguyễn Lê Duy**  
+- **PhD. Võ Nguyễn Lê Duy**  
   Email: [duyvnl@uit.edu.vn](mailto:tiendv@uit.edu.vn)
+
 ---
 
-# Personalized Course Recommendation System
+<h1 align="center">Animal Migration Generation</h1>
 
-This project is a **Personalized Course Recommendation System** designed to suggest optimal learning paths for online learners based on their profiles, goals, and study history.
+*This project is an Animal Migration Generation system designed to simulate and visualize animal migration patterns, specifically for the Western Palearctic greater white-fronted geese and White Stork (Ciconia ciconia), using real-world datasets.*
 
 ## Dataset
-- *Update ...*
+
+- *The Western Palearctic greater white-fronted geese dataset*: Contains migration data for greater white-fronted geese.
+- *The White Stork Ciconia ciconia dataset*: Includes migration tracking data for White Storks.
 
 ## Features
-- **Personalized course recommendations** based on the user’s profile.
-- **Tailored learning paths** to guide users through an optimal sequence of courses.
+
+- **Migration Simulation**: Generates realistic migration paths based on historical data.
+- **Interactive Visualization**: Displays migration routes and patterns on an interactive map.
+- **Data Insights**: Provides analytical insights into migration behaviors and environmental factors.
 
 ## Technologies Used
-- **Frontend**: ReactJS or Streamlit (for simplicity)
-- **Backend**: Flask or FastAPI
-- **Machine Learning**: Scikit-learn, XGBoost (for prediction models)
-- **Visualization**: Plotly, Seaborn (for performance feedback)
+
+- *Frontend*: ...
+- *Backend*: ...
+- *Data Processing*: ...
+- *Visualization*: Plotly, Seaborn, or Leaflet (for mapping)
 
 ## Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/PTD504/Data-Mining-UIT.git
-   cd Data-Mining-UIT
-   ```
+1. **Clone the repository**
 
-2. **Create a virtual environment**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
+```bash
+git clone https://github.com/PTD504/Data-Mining-UIT.git
+cd Data-Mining-UIT
+```
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
 
-4. **Run the application**:
-   update ...
+2. **Create a virtual environment**
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows use "venv\Scripts\activate"
+```
 
-## Usage
-Once the application is running, users can enter their learning goals, skill levels, and available study time. The system will suggest a personalized learning path and predict the likelihood of completing each course.
 
----
+3. **Install dependencies**
+`pip install -r requirements.txt`
 
-## **Future Work**
-- **Expand Course Database**: Integrate more courses from other platforms such as Udemy or Masterclass.
-- **Advanced AI Techniques**: Explore deep learning models for better predictions.
-- **Improved UI/UX**: Enhance the interface for a more interactive user experience.
+
+4. **Run the application**
+   - Update ...
+
+## Future Work
+
+- **Expand Dataset**: Incorporate additional species and migration datasets for broader analysis.
+- **Advanced Modeling**: Implement deep learning or agent-based models for more accurate simulations.
+- **Enhanced Visualizations**: Integrate real-time weather data or 3D visualizations for a richer user experience.
 
 ---
 
-## **License**
+## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
