@@ -26,12 +26,11 @@
 
 <h1 align="center">Animal Migration Generation</h1>
 
-*This project is an Animal Migration Generation system designed to simulate and visualize animal migration patterns, specifically for the Western Palearctic greater white-fronted geese and White Stork (Ciconia ciconia), using real-world datasets.*
+*This project is an Animal Migration Generation system designed to simulate and visualize animal migration patterns, specifically for the Western Palearctic greater white-fronted geese, using real-world datasets.*
 
 ## Dataset
 
 - *The Western Palearctic greater white-fronted geese dataset*: Contains migration data for greater white-fronted geese.
-- *The White Stork Ciconia ciconia dataset*: Includes migration tracking data for White Storks.
 
 ## Features
 
