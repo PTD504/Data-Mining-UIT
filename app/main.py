@@ -8,10 +8,14 @@ from sklearn.cluster import DBSCAN
 import folium
 from streamlit_folium import st_folium
 from sklearn.metrics import silhouette_score
-from shapely.geometry import MultiPoint
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics.pairwise import haversine_distances
+from utils import get_weather_data  # Your existing utility function
+
+api_key = "d62e6942105fef7a514b277c5bbbc956"
 
 def get_bounding_area(gdf, buffer_deg=0.01):
-    bounds = gdf.total_bounds  # (minx, miny, maxx, maxy)
+    bounds = gdf.total_bounds
     minx, miny, maxx, maxy = bounds
     return Polygon([
         (minx - buffer_deg, miny - buffer_deg),
@@ -24,11 +28,10 @@ def clip_voronoi_cells(voronoi_gdf, radius_deg=0.05):
     clipped_polygons = []
     for poly in voronoi_gdf.geometry:
         centroid = poly.centroid
-        circle = centroid.buffer(radius_deg)  # buffer in degrees (~111 km/deg latitude)
+        circle = centroid.buffer(radius_deg)
         clipped = poly.intersection(circle)
         clipped_polygons.append(clipped)
     return gpd.GeoDataFrame(geometry=clipped_polygons, crs="EPSG:4326")
-
 
 @st.cache_data
 def create_voronoi_grid(coords, _boundary_geom=None):
@@ -55,90 +58,145 @@ def load_data(uploaded_file):
     return gdf
 
 def main():
+    st.title("Weather-Aware Spatial Clustering")
+    
     uploaded_file = st.file_uploader("Upload your CSV", type=["csv"])
     if uploaded_file is not None:
         gdf = load_data(uploaded_file)
         coords = np.array(list(zip(gdf.geometry.x, gdf.geometry.y)))
         
-        # 1. Create boundary around your data (with buffer)
+        # Create Voronoi grid
         boundary_geom = get_bounding_area(gdf, buffer_deg=0.01)
         voronoi_grid = create_voronoi_grid(coords, _boundary_geom=boundary_geom)
         voronoi_grid = clip_voronoi_cells(voronoi_grid, radius_deg=0.05)
 
-        # 3. Ensure geometries are valid
+        # Process data
         gdf = gdf[gdf.geometry.notnull()]
         voronoi_grid = voronoi_grid[voronoi_grid.geometry.notnull()]
         voronoi_grid.reset_index(drop=True, inplace=True)
 
-        # 4. Assign points to polygons using spatial join
+        # Spatial join and count
         joined = gpd.sjoin(gdf, voronoi_grid, how='left', predicate='intersects')
-
-        # 5. Count how many points fall into each polygon
         density = joined.groupby('index_right').size()
         voronoi_grid['trajectory_count'] = voronoi_grid.index.map(density).fillna(0)
 
-
-        threshold = st.slider("Preservable Area Threshold", 1, 100, 10, key='threshold')
+        # Get weather data
+        threshold = st.slider("Preservable Area Threshold", 1, 100, 10)
         high_density_polygons = voronoi_grid[voronoi_grid['trajectory_count'] > threshold].copy()
+        
+        weather_info = []
+        for _, row in high_density_polygons.iterrows():
+            centroid = row.geometry.centroid
+            weather = get_weather_data(centroid.y, centroid.x, api_key)
+            weather_info.append(weather)
+        
+        high_density_polygons["weather"] = weather_info
 
         if len(high_density_polygons) >= 3:
-            coords_cluster = np.array([[geom.centroid.x, geom.centroid.y] for geom in high_density_polygons.geometry])
+            # Prepare features
+            valid_polygons = []
+            features = []
+            
+            for _, row in high_density_polygons.iterrows():
+                if row["weather"]:
+                    centroid = row.geometry.centroid
+                    # Spatial features
+                    lat = centroid.y
+                    lon = centroid.x
+                    # Weather features
+                    temp = row["weather"]["temperature_celsius"]
+                    humidity = row["weather"]["humidity"]
+                    
+                    valid_polygons.append(row)
+                    features.append([lat, lon, temp, humidity])
+            
+            if len(features) < 2:
+                st.warning("Not enough valid weather data points for clustering")
+                return
 
-            # Convert to radians for haversine distance
-            coords_rad = np.radians(coords_cluster)
+            # Convert to numpy array
+            features = np.array(features)
+            
+            # Normalize features
+            scaler = StandardScaler()
+            features_scaled = scaler.fit_transform(features)
+            
+            # Create weights for features
+            st.subheader("Feature Weights")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                lat_weight = st.slider("Latitude Weight", 0.1, 2.0, 1.0)
+            with col2:
+                lon_weight = st.slider("Longitude Weight", 0.1, 2.0, 1.0)
+            with col3:
+                temp_weight = st.slider("Temperature Weight", 0.1, 2.0, 0.5)
+            with col4:
+                humid_weight = st.slider("Humidity Weight", 0.1, 2.0, 0.5)
 
-            # Earth radius in km
-            kms_per_radian = 6371.0088
+            # Apply weights
+            weighted_features = features_scaled * np.array([lat_weight, lon_weight, temp_weight, humid_weight])
+            
+            # DBSCAN parameters
+            st.subheader("Clustering Parameters")
+            eps = st.slider("EPS (scaled units)", 0.1, 5.0, 1.0)
+            min_samples = st.slider("Minimum samples", 1, 10, 2)
+            
+            # Run DBSCAN
+            db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean').fit(weighted_features)
+            clusters = db.labels_
+            
+            # Update polygons with clusters
+            high_density_polygons = high_density_polygons.iloc[[i for i, row in enumerate(high_density_polygons.iterrows()) if row[1]["weather"]]]
+            high_density_polygons['cluster'] = clusters
 
-            # User input for clustering radius in kilometers
-            eps_km = st.slider("DBSCAN eps (in km)", 10, 500, 100)  # Adjust range as needed
-            eps_rad = eps_km / kms_per_radian
-
-            # User input for minimum samples
-            min_samples = st.slider("DBSCAN - min_samples", 1, 10, 2)
-
-            # Run DBSCAN with Haversine metric
-            db = DBSCAN(eps=eps_rad, min_samples=min_samples, metric='haversine').fit(coords_rad)
-            high_density_polygons['cluster'] = db.labels_
-            # Create Folium Map
-            map_center = [gdf.geometry.y.mean(), gdf.geometry.x.mean()]
+            # Visualization
+            map_center = [features[:,0].mean(), features[:,1].mean()]
             m = folium.Map(location=map_center, zoom_start=12)
             
+            # Add polygons
             folium.GeoJson(
                 high_density_polygons.to_json(),
                 style_function=lambda feature: {
-                    'fillColor': f'#{hex(abs(feature["properties"]["cluster"] * 137) % 256)[2:].zfill(2)}55aa55',
+                    'fillColor': f'hsl({abs(feature["properties"]["cluster"])*60}, 70%, 50%)',
                     'color': 'black',
-                    'weight': 2,
+                    'weight': 1,
                     'fillOpacity': 0.6,
                 },
                 tooltip=folium.GeoJsonTooltip(fields=['cluster', 'trajectory_count']),
             ).add_to(m)
 
-            for _, row in high_density_polygons.iterrows():
+            # Add weather markers
+            for idx, row in high_density_polygons.iterrows():
                 centroid = row.geometry.centroid
-                popup_content = f"Centroid Longitude: {centroid.x:.6f}<br>Centroid Latitude: {centroid.y:.6f}"
+                weather = row["weather"]
+                popup_content = f"""
+                    Temperature: {weather['temperature_celsius']:.1f}°C<br>
+                    Humidity: {weather['humidity']}%<br>
+                    Conditions: {weather['weather_description']}
+                """
                 folium.CircleMarker(
                     location=[centroid.y, centroid.x],
-                    radius=3,
-                    color='red',
-                    fill=True,
-                    fill_opacity=0.6,
-                    popup=folium.Popup(popup_content, max_width=200),
+                    radius=5,
+                    color='#333333',
+                    fill_color=f'hsl({abs(row["cluster"])*60}, 70%, 50%)',
+                    fill_opacity=0.7,
+                    popup=folium.Popup(popup_content, max_width=250),
                 ).add_to(m)
 
-            st.subheader("Interactive Preservable Area Map")
-            st_folium(m, width=900, height=600, key='folium_map')
+            st.subheader("Weather-Aware Clusters")
+            st_folium(m, width=900, height=600)
 
-            # Exclude noise points
-            mask = high_density_polygons['cluster'] != -1
-            if len(set(high_density_polygons[mask]['cluster'])) > 1:
-                score = silhouette_score(coords_rad[mask], high_density_polygons[mask]['cluster'], metric='euclidean')
-                st.write(f"Silhouette Score: {score:.3f}")
+            # Metrics
+            unique_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
+            if unique_clusters > 1:
+                score = silhouette_score(weighted_features, clusters)
+                st.metric("Silhouette Score", f"{score:.3f}")
+                st.caption(f"Identified {unique_clusters} distinct weather-spatial patterns")
             else:
-                st.warning("Not enough clusters to compute Silhouette Score.")
+                st.warning("Not enough clusters for meaningful evaluation")
+
         else:
-            st.warning("Not enough high-density polygons to form clusters. Try lowering the threshold or adjusting DBSCAN parameters.")
+            st.warning("Not enough high-density areas for clustering")
 
 if __name__ == "__main__":
     main()
