@@ -69,7 +69,9 @@ pip install -r requirements.txt
 
 
 4. **Run the application**
-   - Update ...
+```bash
+streamlit run app/main.py
+```
 
 ## Future Work
 
