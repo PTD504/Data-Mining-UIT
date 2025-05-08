@@ -8,3 +8,8 @@ scipy==1.15.2
 Shapely==2.1.0
 streamlit==1.45.0
 streamlit_folium==0.25.0
+tensorflow==2.16.1
+matplotlib==3.8.3
+seaborn==0.13.2
+branca==0.8.1
+IPython==7.34.0
