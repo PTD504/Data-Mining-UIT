@@ -250,41 +250,93 @@ def main_app_page():
     map_center_lon = features_np[:,1].mean() if features_np.shape[0] > 0 else gdf.geometry.x.mean()
     m = folium.Map(location=[map_center_lat, map_center_lon], zoom_start=5)
 
+    clusters_to_draw = valid_polygons_gdf[valid_polygons_gdf['cluster'] != -1]
+
+    if not clusters_to_draw.empty:
+        # Nhóm các đa giác theo cụm và tạo một đa giác hợp nhất cho mỗi cụm
+        # Sau đó tính convex hull cho đa giác hợp nhất đó.
+        # Hoặc đơn giản hơn: lấy convex hull của tất cả các geometry trong một cụm
+        
+        # Tạo một GeoDataFrame mới cho các vùng bao của cluster
+        cluster_boundaries_list = []
+
+        for cluster_id, group in clusters_to_draw.groupby('cluster'):
+            if cluster_id == -1: # Bỏ qua nhiễu
+                continue
+
+            # Gộp tất cả các geometries trong cụm này thành một MultiPolygon hoặc Polygon duy nhất
+            # unary_union sẽ xử lý các phần chồng chéo và tạo ra một hình dạng "sạch"
+            combined_geometry_for_cluster = group.geometry.unary_union
+            
+            # Tính convex hull của hình dạng kết hợp này
+            # Convex hull sẽ tạo ra một đa giác lồi bao quanh tất cả các phần của cụm
+            convex_hull_for_cluster = combined_geometry_for_cluster.convex_hull
+            
+            cluster_boundaries_list.append({
+                'cluster': cluster_id,
+                'geometry': convex_hull_for_cluster,
+                'num_polygons_in_cluster': len(group) # Thêm thông tin nếu muốn
+            })
+
+        if cluster_boundaries_list:
+            cluster_hulls_gdf = gpd.GeoDataFrame(cluster_boundaries_list, crs=clusters_to_draw.crs)
+
+            # Thêm các vùng bao cluster vào bản đồ
+            folium.GeoJson(
+                cluster_hulls_gdf.to_json(),
+                style_function=lambda feature: {
+                    'fillColor': f'hsl({abs(feature["properties"]["cluster"])*60 % 360}, 70%, 50%)', # Màu giống với các ô
+                    'color': f'hsl({abs(feature["properties"]["cluster"])*60 % 360}, 90%, 30%)', # Màu viền đậm hơn
+                    'weight': 2.5, # Độ dày viền
+                    'fillOpacity': 0.3, # Độ mờ của vùng tô, để vẫn thấy các ô bên dưới
+                    'dashArray': '5, 5' # Kiểu đường viền (nét đứt) nếu muốn
+                },
+                tooltip=folium.GeoJsonTooltip(fields=['cluster', 'num_polygons_in_cluster'], aliases=['Cluster ID:', 'Polygons in Cluster:'])
+            ).add_to(m)
+
+    # --- Phần vẽ các ô Voronoi gốc và CircleMarker vẫn giữ nguyên hoặc điều chỉnh ---
+    # Bạn có thể muốn giảm độ mờ của các ô Voronoi gốc nếu đã có vùng bao cluster
     if not valid_polygons_gdf.empty:
         folium.GeoJson(
             valid_polygons_gdf.to_json(),
             style_function=lambda feature: {
                 'fillColor': f'hsl({abs(feature["properties"]["cluster"])*60 % 360}, 70%, 50%)' if feature["properties"]["cluster"] != -1 else '#808080',
                 'color': 'black',
-                'weight': 1,
-                'fillOpacity': 0.6,
+                'weight': 0.5, # Giảm độ dày viền của các ô con
+                'fillOpacity': 0.5, # Có thể tăng độ mờ nếu đã có vùng bao cluster rõ ràng
             },
             tooltip=folium.GeoJsonTooltip(fields=['cluster', 'trajectory_count']),
+            name="Individual Voronoi Cells" # Đặt tên cho lớp này
         ).add_to(m)
 
+        # CircleMarkers có thể vẫn hữu ích để xem thông tin chi tiết
         for _, row in valid_polygons_gdf.iterrows():
             if row.geometry is not None and not row.geometry.is_empty:
                 centroid = row.geometry.centroid
                 weather = row["weather"]
-                if weather: # Kiểm tra weather có tồn tại không
+                if weather:
                     popup_content = f"""
-                    Cluster: {row['cluster']}<br>
-                    Count: {row['trajectory_count']}<br>
+                    <b>Cluster: {row['cluster']}</b><br>
+                    Voronoi Cell Trajectory Count: {row['trajectory_count']}<br>
                     Temp: {weather.get('temperature_celsius', 'N/A'):.1f}°C<br>
                     Humidity: {weather.get('humidity', 'N/A')}%<br>
                     Conditions: {weather.get('weather_description', 'N/A')}
                     """
                     folium.CircleMarker(
                         location=[centroid.y, centroid.x],
-                        radius=5,
+                        radius=4, # Có thể giảm bán kính một chút
                         color='#333333',
-                        fill_color=f'hsl({abs(row["cluster"])*60 % 360}, 70%, 50%)' if row["cluster"] != -1 else '#808080', # Thêm điều kiện cho noise points
-                        fill_opacity=0.7,
-                        popup=folium.Popup(popup_content, max_width=300), # Tăng max_width
+                        fill_color=f'hsl({abs(row["cluster"])*60 % 360}, 70%, 50%)' if row["cluster"] != -1 else '#808080',
+                        fill_opacity=0.8, # Tăng fill_opacity của marker để nổi bật
+                        popup=folium.Popup(popup_content, max_width=300),
                     ).add_to(m)
 
-    st.subheader("Clustering Map of Migration Trajectories")
+    # Thêm LayerControl để người dùng có thể bật/tắt các lớp
+    folium.LayerControl().add_to(m)
+
+    st.subheader("Clustering Map of Migration Trajectories") # Đổi tên subheader nếu cần
     folium_static(m, width=1200, height=600)
+
 
     # Tính Silhouette Score
     # Đảm bảo có ít nhất 2 cụm (không bao gồm nhiễu) và nhiều hơn 1 điểm dữ liệu để tính silhouette score
