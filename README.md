@@ -38,13 +38,6 @@
 - **Interactive Visualization**: Displays migration routes and patterns on an interactive map.
 - **Data Insights**: Provides analytical insights into migration behaviors and environmental factors.
 
-## Technologies Used
-
-- *Frontend*: ...
-- *Backend*: ...
-- *Data Processing*: ...
-- *Visualization*: Plotly, Seaborn, or Leaflet (for mapping)
-
 ## Installation
 
 1. **Clone the repository**
