@@ -74,7 +74,7 @@ def create_voronoi_grid(coords_tuple, _boundary_geom=None): # coords phải là 
 st.set_page_config(page_title="Clustering Analysis", layout="wide") # Đặt tiêu đề cho tab
 
 def main_app_page():
-    st.title("Weather-Aware Spatial Clustering (Main App)") # Tiêu đề trong trang
+    st.title("Clustering Map of Migration Trajectories") # Tiêu đề trong trang
 
     if 'gdf_data' not in st.session_state:
         st.warning("Please upload data through the main app page (app.py) first.")
