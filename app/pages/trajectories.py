@@ -214,9 +214,9 @@ def trajectory_visualization_page():
         df_display = df_display[[col for col in df_display_cols if col in df_display.columns]]
         if 'Start Time' in df_display: df_display['Start Time'] = df_display['Start Time'].dt.strftime('%Y-%m-%d %H:%M')
         if 'End Time' in df_display: df_display['End Time'] = df_display['End Time'].dt.strftime('%Y-%m-%d %H:%M')
+        # Dòng 217 trong tệp D:\Data-Mining-UIT\app\pages\trajectories.py
         st.dataframe(df_display, use_container_width=True, hide_index=True,
-                     column_config={"_Color_HTML_": st.column_config.TextColumn(label="Màu")},
-                     html_escape=False)
+                    column_config={"_Color_HTML_": st.column_config.TextColumn(label="Màu")})
     else: st.info("Không có quỹ đạo nào để hiển thị dựa trên các lựa chọn hiện tại.")
 
 if __name__ == "__main__":
