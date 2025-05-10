@@ -1,7 +1,7 @@
 # CS313.P21---Data Mining
 ![UIT](https://img.shields.io/badge/from-UIT%20VNUHCM-blue?style=for-the-badge&link=https%3A%2F%2Fwww.uit.edu.vn%2F)
 
- <h2 align="center"> ANIMAL MIGRATION GENERATION </h2>
+ <h2 align="center"> ANIMAL MIGRATION CLUSTERING </h2>
 
 <p align="center">
   <img src="https://en.uit.edu.vn/sites/vi/files/banner_en.png" alt="Alt text">
@@ -24,9 +24,9 @@
 
 ---
 
-<h1 align="center">Animal Migration Generation</h1>
+<h1 align="center">Animal Migration Clustering</h1>
 
-*This project is an Animal Migration Generation system designed to simulate and visualize animal migration patterns, specifically for the Western Palearctic greater white-fronted geese, using real-world datasets.*
+*Our project is an Animal Migration Clustering system, focusing on analyzing the past movement data of Western Palearctic greater white-fronted geese to identify key areas for conservation. Furthermore, we will explore applying advanced data generation algorithms such as GANs and VAEs to augment and enrich the existing dataset, thereby enhancing the effectiveness of our clustering model.*
 
 ## Dataset
 
@@ -35,6 +35,8 @@
 ## Features
 
 - **Migration Simulation**: Generates realistic migration paths based on historical data.
+- **Migration Clustering**: Implements various clustering algorithms (e.g., K-Means, DBSCAN) to group similar migration patterns.
+- **Cluster Visualization**: Displays identified migration clusters on an interactive map, highlighting distinct movement behaviors.
 - **Interactive Visualization**: Displays migration routes and patterns on an interactive map.
 - **Data Insights**: Provides analytical insights into migration behaviors and environmental factors.
 
